@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+name: gat
+
+init:
+  _target_: models.QM9GAT
+  _partial_: false
+  num_node_features: 11
