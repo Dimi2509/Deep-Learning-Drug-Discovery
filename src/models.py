@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, global_mean_pool, GINConv
+from torch_geometric.nn import GCNConv, global_mean_pool, GINConv, global_add_pool, global_max_pool, global_sort_pool
 import torch.nn as nn
 
 
@@ -73,7 +73,7 @@ class GIN(torch.nn.Module):
 
 
         #2 readout
-        x = global_mean_pool(x, batch)
+        x = global_max_pool(x, batch)
 
         #3 Prediction
         x = self.linear(x)

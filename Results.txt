@@ -7,3 +7,8 @@ Supervised_loss = .12733
 #With Batch Normalization (Commit 2)
 Val_MSE = .066725
 Supervised_Loss = .062826
+
+
+#With global Max (Commit 3) 
+Val_Mse = 0.06168437695928982
+Supervised_Loss: 0.04773641679258574
