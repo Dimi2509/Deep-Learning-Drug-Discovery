@@ -1,14 +1,56 @@
-#First try only the GIN Model (Commit 1)
+#All of this will have everything that is coomitted unless is specified that we did a channge
+#First try only the GIN Model 2 MLP layers (Commit 1)
 
 Val_MSE = .12986
 Supervised_loss = .12733
 
 
-#With Batch Normalization (Commit 2)
+#With Batch Normalization, 2 MLP layers and batch normalizatin (Commit 2)
 Val_MSE = .066725
 Supervised_Loss = .062826
 
 
-#With global Max (Commit 3) 
+#With global Max, 2 MLP layers and batch normalization (Commit 3) I think this kind overfitting
 Val_Mse = 0.06168437695928982
 Supervised_Loss: 0.04773641679258574
+
+
+#Trying with 3 MLP and back to global mean (No commit) 
+
+Val_Mse = 	0.051075853407382965
+Supervised =	0.04323445235689481
+
+#3MLP y dropout (.3)
+
+Val_MSE =	0.08992797881364822
+Supervised =  0.3593587026709602
+
+# 4MLP y dropout (0)
+
+Val_Mse =	0.044941339641809464
+Supervised =	0.030438457535845894
+
+# 5 MLP y dropout (0)
+
+Val_MSe =	0.042162563119615824
+Supervised_ =   0.025710840221671832
+
+# 5 MLP y dropout only inside the last 3 mlp and before the forward (0.2)
+
+Val_MSe =	0.060023563248770576
+Supervised_ =   0.19382206946611405
+
+# 5 MLP y dropout only inside the last 3 mlp and before the forward (0.05)
+
+ val_MSE	0.0447766828749861
+ supervised_loss	0.07670650656024615
+
+# 5 MLP & No dropout & With residual Connection
+
+ val_MSE	  0.041724082082509995
+ supervised_loss  0.03027419359201477	
+
+
+# 5 MLP & No dropout & No Residual Connection and 128 Hidden Channels (Commit 4)
+val_MSE = 0.038730944373777935
+Supervised_loss =	0.015085437787430628
