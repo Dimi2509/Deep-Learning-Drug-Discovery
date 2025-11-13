@@ -1,0 +1,4 @@
+#First try only the GIN Model
+
+Val_MSE = .12986
+Supervised_loss = .12733
