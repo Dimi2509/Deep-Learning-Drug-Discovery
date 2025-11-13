@@ -1,4 +1,9 @@
-#First try only the GIN Model
+#First try only the GIN Model (Commit 1)
 
 Val_MSE = .12986
 Supervised_loss = .12733
+
+
+#With Batch Normalization (Commit 2)
+Val_MSE = .066725
+Supervised_Loss = .062826

@@ -46,17 +46,31 @@ class GIN(torch.nn.Module):
             nn.Linear(hidden_channels,hidden_channels)
         )
 
+
         #GINConv sums is a wrapper learns from their neighbors
         self.conv1 = GINConv(mlp1, train_eps=True)
         self.conv2 = GINConv(mlp2, train_eps=True)
+
+        #Adding BatchNorm
+        self.bn1 = nn.BatchNorm1d(hidden_channels)
+        self.bn2 = nn.BatchNorm1d(hidden_channels)
+
+        #Linear Layer
         self.linear = nn.Linear(hidden_channels,1)
+
+        
     def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch
 
         #1 Gin layers
         x = self.conv1(x, edge_index)
+        x = self.bn1(x)
         x = x.relu()
+
         x = self.conv2(x,edge_index)
+        x = self.bn2(x)
+        x = x.relu()
+
 
         #2 readout
         x = global_mean_pool(x, batch)
