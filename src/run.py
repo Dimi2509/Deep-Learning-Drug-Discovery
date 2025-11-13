@@ -34,8 +34,13 @@ def main(cfg):
     if cfg.compile_model:
         model = torch.compile(model)
     models = [model]
-    trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
+    # The way the trainer yaml is setup will automatically instanciate the trainer class and populate some of the arguments such as supervised_criterion: _target_: torch.nn.MSELoss
+    trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device) 
 
+    print("Starting training with following config and hyperparameters:")
+    print("Batch normalization")
+    print(OmegaConf.to_yaml(cfg.trainer.train))
+    print(OmegaConf.to_yaml(cfg.trainer.init))
     results = trainer.train(**cfg.trainer.train)
     results = torch.Tensor(results)
 

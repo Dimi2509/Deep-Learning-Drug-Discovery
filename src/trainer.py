@@ -75,6 +75,8 @@ class SemiSupervisedEnsemble:
             }
             if epoch % validation_interval == 0 or epoch == total_epochs:
                 val_metrics = self.validate()
-                summary_dict.update(val_metrics)
+                summary_dict.update(val_metrics) # Appends to the summary dict
                 pbar.set_postfix(summary_dict)
             self.logger.log_dict(summary_dict, step=epoch)
+
+        return np.array(0)

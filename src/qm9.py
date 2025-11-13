@@ -55,7 +55,7 @@ class QM9DataModule(pl.LightningDataModule):
         QM9(root=self.data_dir)
 
     def setup(self, stage: str | None = None) -> None:
-        dataset = QM9(root=self.data_dir, transform=GetTarget(self.target))
+        dataset = QM9(root=self.data_dir, transform=GetTarget(self.target)) # Takes all rows for column target
 
         # Shuffle dataset
         rng = np.random.default_rng(seed=self.seed)
@@ -70,6 +70,8 @@ class QM9DataModule(pl.LightningDataModule):
             split_sizes = self.splits
         elif all([type(split) == float for split in self.splits]):
             split_sizes = [int(len(dataset) * prop) for prop in self.splits]
+        else:
+            raise ValueError("Splits must be all int or all float.")
 
         split_idx = np.cumsum(split_sizes)
 
