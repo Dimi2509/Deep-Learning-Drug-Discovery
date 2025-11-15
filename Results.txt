@@ -54,3 +54,75 @@ Supervised_ =   0.19382206946611405
 # 5 MLP & No dropout & No Residual Connection and 128 Hidden Channels (Commit 4)
 val_MSE = 0.038730944373777935
 Supervised_loss =	0.015085437787430628
+
+
+# 256 Hidden Channels
+val_MSE = 0.037938526698521206
+Supervised_oss = 0.011239296747815042
+
+#256 Hidden Channels, Residual Connection (Only in the first Gin Layer) and Max Pool
+
+val_MSE =	0.033880494002785
+Supervissed_Loss =	0.006943304408785133
+
+#256 Hidden Channels, Residual Connection, 6MLP and Max Pool
+
+val_MSE = 0.03807221459490912
+Supervissed_Loss = 0.011414571363656294
+
+#256 Hidden Channels, 6MLP and Max Pool
+
+val_MSE = 0.03778144131813731
+Supervissed_Loss = 0.011515076383061353
+
+
+
+
+# El primer resutado se hizo con la combinacion de un residual net y el Segundo Tambien pero el tercero se hizo con un residual net 6 mlp
+Val
+gin_seed=0	0.035359526319163184
+gin_seed=0	0.033880494002785
+gin_seed=0	0.034613218158483505
+supervised loss
+gin_seed=0	0.0059325199197268206
+gin_seed=0	0.0060969894685383354
+gin_seed=0	0.0067687392456545715
+
+
+#512 Hidden Channels, 6MLP and MaxPool and one residual net in the first mlp
+
+val_MSE =	0.03333914705685207
+Supervissed_Loss	0.00507482181170157
+
+
+#1024 Hidden Channels, 6MLP and MaxPool and one residual net in the first mlp
+
+val_MSE =	0.03498830486621175
+Supervissed_Loss	0.010892853743973233
+
+#512 Hidden Channels, 6MLP and MaxPool and two residual net in the first mlp
+val_MSE=0	0.0339638955358948
+Supervised_loss=0	0.007381029078914296
+
+#512 Hidden Channels, 6MLP and MaxPool and three residual net in the first mlp
+
+val_MSE=0	gin_seed=0	0.035009585320949554
+Supervised_loss=0  gin_seed=0	0.010596325363786447
+
+
+#512 Hidden Channels, 6MLP and MaxPool and three residual net in the first mlp and Dropout the first three layers (.2)
+
+val_MSE = gin_seed=0	0.040111160171883445
+Supervissed_loss = gin_seed=0	0.021281135525731812
+
+
+#512 Hidden Channels, 5MLP and MaxPool and three residual net in the first mlp 
+
+
+val_Mse	0.035660719232899804
+Supervissed_loss	0.011615928861179523
+
+
+#512 Hidden Channels, 5MLP and MaxPool and one residual net in the first mlp 
+val_Mse =	0.034008429518767765
+gin_seed=0	0.0052213282457419805
