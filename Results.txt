@@ -125,4 +125,32 @@ Supervissed_loss	0.011615928861179523
 
 #512 Hidden Channels, 5MLP and MaxPool and one residual net in the first mlp 
 val_Mse =	0.034008429518767765
-gin_seed=0	0.0052213282457419805
+Supervissed_loss	0.0052213282457419805
+
+
+#256 Hidden Channels, 5MLP and MaxPool and one residual net in the first mlp and weight decay .02
+val_Mse =		0.0346172670168536
+Supervissed_loss	0.006267141450994781
+
+#256 Hidden Channels, 5MLP and MaxPool and one residual net in the first mlp
+weight_decay: first .10 and the second .05
+  scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 50
+    gamma: 0.5
+Val_Mse 
+gin_seed=0	0.036312357655593326
+gin_seed=0	0.0360378378203937
+Supervised_Loss
+gin_seed=0	0.0017874048551588895
+gin_seed=0	0.0016308616081784878
+
+
+Last commit #256 Hidden Channels, 5MLP and MaxPool and one residual net in the first mlp weight decay .05
+
+val_mse =	0.033696867525577545
+supervised_loss =	0.0069526744607303825
+
+
+

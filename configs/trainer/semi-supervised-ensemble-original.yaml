@@ -15,7 +15,7 @@ init:
     _target_: torch.optim.AdamW
     _partial_: true
     lr: 0.001
-    weight_decay: 0.05
+    weight_decay: 0.005
   scheduler:
     _target_: torch.optim.lr_scheduler.StepLR
     _partial_: true
