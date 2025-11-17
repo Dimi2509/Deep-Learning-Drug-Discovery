@@ -130,7 +130,7 @@ class GIN(torch.nn.Module):
         #x = F.dropout(x, p=self.dropout, training=self.training)
 
         #3 Gin Layers
-        #identity = x
+        identity = x
         x = self.conv3(x, edge_index)
         x = self.bn3(x)
         x = x.relu()
