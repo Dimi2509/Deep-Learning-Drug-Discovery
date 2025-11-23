@@ -1,6 +1,6 @@
 defaults:
   - dataset: qm9
-  - trainer: semi-supervised-ensemble  # options: self-supervised, supervised
+  - trainer: fixmatch-ensemble  # options: semi-supervised-ensemble, fixmatch-ensemble
   - logger: wandb
   - model: gin
   - _self_
@@ -10,6 +10,6 @@ seed: 0 # Random seed
 device: unset # Device to use (cuda or cpu) if unset will use cuda if available
 force_deterministic: False # Force deterministic algorithms
 debug_mode: False # Debug mode
-result_dir: ./results
+result_dir: ./results 
 compile_model: false # Whether to compile the model with torch.compile
-ensemble_size: 1
+ensemble_size: 5
