@@ -22,8 +22,8 @@ init:
     step_size: 1
     gamma: 0.975
   vat_xi: 1e-5 # initially 1e-5 
-  vat_eps: 2 # was 0.7
+  vat_eps: 3 # was 0.7
   vat_ip: 5
-  unsup_weight: 1.0
+  unsup_weight: 2.0
   unsup_ratio: 5
   
