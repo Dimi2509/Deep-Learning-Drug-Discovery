@@ -3,7 +3,7 @@ defaults:
 
 _target_: logger.WandBLogger
 group: ${dataset.dataset_name} # Name of the group for wandb
-name: ${trainer.method}_${model.name}_epsilon=${trainer.vat_xi} # Name of the run for wandb
+name: ${trainer.method}_${model.name}_epsilon=${trainer.init.vat_xi} # Name of the run for wandb
 job_type: test
 entity: s253814-danmarks-tekniske-universitet-dtu #bnns-for-molecules
 project_name: Deep Learning - Project 2 #semi-supervised-ensembles
