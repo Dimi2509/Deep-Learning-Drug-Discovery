@@ -1,0 +1,28 @@
+defaults:
+  - _self_
+
+method: vat
+
+train:
+  total_epochs: 250
+  validation_interval: 10
+
+init:
+  _target_: trainer.VATTrainer
+  supervised_criterion:
+    _target_: torch.nn.MSELoss
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.001
+    weight_decay: 0.05
+  scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 1
+    gamma: 0.975
+  vat_xi: 1e-5
+  vat_eps: 0.7
+  # vat_ip: 1
+  # unsup_weight: 1.0
+

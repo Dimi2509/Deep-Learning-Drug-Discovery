@@ -351,3 +351,280 @@ class FixMatchEnsemble:
             self.logger.log_dict(summary_dict, step=epoch)
         
         return summary_dict
+    
+
+class VATTrainer:
+    """Virtual Adversarial Training (VAT) trainer for regression using a GNN predictor.
+
+    Notes:
+    - Expects the datamodule to provide `train_dataloader()` for labeled data and
+      `unsupervised_train_dataloader()` for unlabeled data.
+    - Uses MSE as the divergence for VAT (suitable for regression outputs).
+    - Accepts models as a list, iterates over all but designed for single model use.
+    """
+    def __init__(
+        self,
+        supervised_criterion,
+        optimizer,
+        scheduler,
+        device,
+        models,
+        logger,
+        datamodule,
+        vat_xi: float = 1e-4,
+        vat_eps: float = 0.5,
+        vat_ip: int = 1,
+        unsup_weight: float = 1.0,
+        unsup_ratio: int = 5
+    ):
+        self.device = device
+        self.models = models
+
+        # Optim related things
+        from hydra.utils import instantiate as _hydra_instantiate
+
+        # supervised criterion: accept an instantiated loss, callable, or config
+        if isinstance(supervised_criterion, torch.nn.modules.loss._Loss):
+            self.supervised_criterion = supervised_criterion
+        elif callable(supervised_criterion):
+            self.supervised_criterion = supervised_criterion()
+        else:
+            try:
+                self.supervised_criterion = _hydra_instantiate(supervised_criterion)
+            except Exception:
+                self.supervised_criterion = torch.nn.MSELoss()
+
+        all_params = [p for m in self.models for p in m.parameters()]
+
+        # optimizer may be a DictConfig, callable (partial), or already-instantiated
+        if isinstance(optimizer, torch.optim.Optimizer):
+            self.optimizer = optimizer
+        elif isinstance(optimizer, partial):
+            try:
+                self.optimizer = optimizer(params=all_params)
+            except TypeError:
+                self.optimizer = optimizer(all_params)
+        elif callable(optimizer):
+            self.optimizer = optimizer(params=all_params)
+        else:
+            try:
+                opt = _hydra_instantiate(optimizer, params=all_params)
+                if isinstance(opt, partial):
+                    try:
+                        self.optimizer = opt(params=all_params)
+                    except TypeError:
+                        self.optimizer = opt(all_params)
+                else:
+                    self.optimizer = opt
+            except Exception as e:
+                raise RuntimeError(f"Could not instantiate optimizer from config: {e}")
+
+        # scheduler may also be a config/callable/instantiated
+        if isinstance(scheduler, torch.optim.lr_scheduler._LRScheduler):
+            self.scheduler = scheduler
+        elif isinstance(scheduler, partial):
+            try:
+                self.scheduler = scheduler(optimizer=self.optimizer)
+            except TypeError:
+                self.scheduler = scheduler(self.optimizer)
+        elif callable(scheduler):
+            self.scheduler = scheduler(optimizer=self.optimizer)
+        else:
+            try:
+                sch = _hydra_instantiate(scheduler, optimizer=self.optimizer)
+                if isinstance(sch, partial):
+                    try:
+                        self.scheduler = sch(optimizer=self.optimizer)
+                    except TypeError:
+                        self.scheduler = sch(self.optimizer)
+                else:
+                    self.scheduler = sch
+            except Exception as e:
+                raise RuntimeError(f"Could not instantiate scheduler from config: {e}")
+
+        # VAT hyperparams
+        self.vat_xi = vat_xi
+        self.vat_eps = vat_eps
+        self.vat_ip = vat_ip
+        self.unsup_weight = unsup_weight
+        self.unsup_ratio = unsup_ratio
+
+        # Dataloader setup
+        self.train_dataloader = datamodule.train_dataloader()
+        self.unsup_dataloader = datamodule.unsupervised_train_dataloader()
+        self.val_dataloader = datamodule.val_dataloader()
+        self.test_dataloader = datamodule.test_dataloader()
+
+        # Logging
+        self.logger = logger
+
+    def _normalize(self, d: torch.Tensor) -> torch.Tensor:
+        d_flat = d.view(-1)
+        norm = torch.norm(d_flat) + 1e-8
+        return d / norm
+
+    def _virtual_adversarial_loss(self, data, model):
+        """Compute VAT loss for a single model."""
+        model.eval()
+        with torch.no_grad():
+            pred = model(data).detach()
+
+        d = torch.randn_like(data.x, device=data.x.device)
+
+        for i in range(self.vat_ip):
+            d.requires_grad_()
+            data_pert = data.clone()
+            data_pert.x = data.x + self.vat_xi * d
+            pred_hat = model(data_pert)
+            adv_distance = torch.nn.functional.mse_loss(pred_hat, pred)
+            
+            adv_distance.backward()
+            d_grad = d.grad
+            
+            if d_grad is None:
+                break
+            d = self._normalize(d_grad.detach())
+            model.zero_grad()
+
+        r_adv = d * self.vat_eps
+        data_r = copy.copy(data)
+        data_r.x = data.x + r_adv
+        pred_r = model(data_r)
+        vat_loss = torch.nn.functional.mse_loss(pred_r, pred)
+        model.train()
+        return vat_loss
+
+    def validate(self):
+        for model in self.models:
+            model.eval()
+
+        val_losses = []
+        with torch.no_grad():
+            for x, targets in self.val_dataloader:
+                x, targets = x.to(self.device), targets.to(self.device)
+                
+                preds = [model(x) for model in self.models]
+                avg_preds = torch.stack(preds).mean(0)
+                
+                val_loss = torch.nn.functional.mse_loss(avg_preds, targets)
+                val_losses.append(val_loss.item())
+        return {"val_MSE": np.mean(val_losses)}
+
+    # def train(self, total_epochs, validation_interval):
+    #     unsup_iter = iter(self.unsup_dataloader)
+
+    #     for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
+    #         for model in self.models:
+    #             model.train()
+
+    #         supervised_losses_logged = []
+    #         vat_losses_logged = []
+
+    #         for x, targets in self.train_dataloader:
+    #             x, targets = x.to(self.device), targets.to(self.device)
+
+    #             try:
+    #                 xu = next(unsup_iter)
+    #             except StopIteration:
+    #                 unsup_iter = iter(self.unsup_dataloader)
+    #                 xu = next(unsup_iter)
+
+    #             xu, _ = xu
+    #             xu = xu.to(self.device)
+
+    #             self.optimizer.zero_grad()
+
+    #             # VAT loss FIRST (has internal backward calls)
+    #             vat_losses = [
+    #                 self._virtual_adversarial_loss(xu, model) 
+    #                 for model in self.models
+    #             ]
+    #             vat_loss = sum(vat_losses)
+
+    #             # Supervised loss AFTER VAT
+    #             supervised_losses = [
+    #                 self.supervised_criterion(model(x), targets) 
+    #                 for model in self.models
+    #             ]
+    #             supervised_loss = sum(supervised_losses)
+
+    #             # Total loss
+    #             loss = supervised_loss + self.unsup_weight * vat_loss
+
+    #             supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
+    #             vat_losses_logged.append(vat_loss.detach().item() / len(self.models))
+
+    #             loss.backward()
+    #             self.optimizer.step()
+
+    #         self.scheduler.step()
+
+    #         summary_dict = {
+    #             "supervised_loss": np.mean(supervised_losses_logged),
+    #             "vat_loss": np.mean(vat_losses_logged),
+    #         }
+    #         if epoch % validation_interval == 0 or epoch == total_epochs:
+    #             val_metrics = self.validate()
+    #             summary_dict.update(val_metrics)
+    #             pbar.set_postfix(summary_dict)
+            # self.logger.log_dict(summary_dict, step=epoch)
+    def train(self, total_epochs, validation_interval):
+        unsup_iter = iter(self.unsup_dataloader)
+
+        for epoch in (pbar := tqdm(range(1, total_epochs + 1))):
+            for model in self.models:
+                model.train()
+
+            supervised_losses_logged = []
+            vat_losses_logged = []
+
+            for x, targets in self.train_dataloader:
+                x, targets = x.to(self.device), targets.to(self.device)
+
+                self.optimizer.zero_grad()
+
+                # Multiple VAT batches
+                vat_loss_total = 0
+                for _ in range(self.unsup_ratio):
+                    try:
+                        xu = next(unsup_iter)
+                    except StopIteration:
+                        unsup_iter = iter(self.unsup_dataloader)
+                        xu = next(unsup_iter)
+
+                    xu, _ = xu
+                    xu = xu.to(self.device)
+
+                    vat_losses = [
+                        self._virtual_adversarial_loss(xu, model) 
+                        for model in self.models
+                    ]
+                    vat_loss_total += sum(vat_losses)
+
+                vat_loss = vat_loss_total / self.unsup_ratio  # Average
+
+                # Supervised loss
+                supervised_losses = [
+                    self.supervised_criterion(model(x), targets) 
+                    for model in self.models
+                ]
+                supervised_loss = sum(supervised_losses)
+
+                loss = supervised_loss + self.unsup_weight * vat_loss
+
+                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
+                vat_losses_logged.append(vat_loss.detach().item() / len(self.models))
+
+                loss.backward()
+                self.optimizer.step()
+            self.scheduler.step()
+
+            summary_dict = {
+                "supervised_loss": np.mean(supervised_losses_logged),
+                "vat_loss": np.mean(vat_losses_logged),
+            }
+            if epoch % validation_interval == 0 or epoch == total_epochs:
+                val_metrics = self.validate()
+                summary_dict.update(val_metrics)
+                pbar.set_postfix(summary_dict)
+            self.logger.log_dict(summary_dict, step=epoch)

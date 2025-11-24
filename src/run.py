@@ -29,22 +29,32 @@ def main(cfg):
 
     dm = hydra.utils.instantiate(cfg.dataset.init)
 
-    #model = hydra.utils.instantiate(cfg.model.init).to(device)
+    model = hydra.utils.instantiate(cfg.model.init).to(device)
 
-    #if cfg.compile_model:
-    #    model = torch.compile(model)
-    #models = [model]
+    if cfg.compile_model:
+       model = torch.compile(model)
+    models = [model]
 
-    N = cfg.get("ensemble_size", 1)
-    models = []
-    for _ in range(N):
-        m = hydra.utils.instantiate(cfg.model.init).to(device)
-        if cfg.compile_model:
-            m = torch.compile(m)
+    # N = cfg.get("ensemble_size", 1)
+    # models = []
+    # for _ in range(N):
+    #     m = hydra.utils.instantiate(cfg.model.init).to(device)
+    #     if cfg.compile_model:
+    #         m = torch.compile(m)
 
-        models.append(m)
+    #     models.append(m)
         
-    trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
+    # trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
+    trainer = hydra.utils.instantiate(
+        cfg.trainer.init,
+        models=models,
+        logger=logger,
+        datamodule=dm,
+        device=device,
+        _recursive_=False,
+    )
+    print('trainer.vat_xi: ', trainer.vat_xi)
+    print('trainer.vat_eps: ',trainer.vat_eps)
 
     results = trainer.train(**cfg.trainer.train)
     results = torch.Tensor(results)
