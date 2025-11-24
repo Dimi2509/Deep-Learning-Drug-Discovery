@@ -15,6 +15,7 @@ class QM9DataModule(pl.LightningDataModule):
         target: int = 0,
         data_dir: str = os.path.join('datasets'),
         batch_size_train: int = 32,
+        batch_size_train_unlabeled: int = 32,
         batch_size_inference: int = 32,
         num_workers: int = 0,
         splits: list[int] | list[float] = [0.72, 0.08, 0.1, 0.1],
@@ -29,6 +30,7 @@ class QM9DataModule(pl.LightningDataModule):
         self.target = target
         self.data_dir = data_dir
         self.batch_size_train = batch_size_train
+        self.batch_size_train_unlabeled = batch_size_train_unlabeled
         self.batch_size_inference = batch_size_inference
         self.num_workers = num_workers
         self.splits = splits
@@ -56,7 +58,7 @@ class QM9DataModule(pl.LightningDataModule):
 
     def setup(self, stage: str | None = None) -> None:
         dataset = QM9(root=self.data_dir, transform=GetTarget(self.target)) # Takes all rows for column target
-
+        
         # Shuffle dataset
         rng = np.random.default_rng(seed=self.seed)
         dataset = dataset[rng.permutation(len(dataset))]

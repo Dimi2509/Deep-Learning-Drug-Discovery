@@ -1,0 +1,43 @@
+defaults:
+  - _self_
+
+method: mean-teacher
+
+train:
+  total_epochs: 250
+  validation_interval: 10
+
+init:
+  _target_: trainer.MeanTeacher
+  
+  # Loss functions
+  supervised_criterion:
+    _target_: torch.nn.MSELoss
+  
+  # Optimizer for student model
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.0001
+    weight_decay: 0.005
+  
+  # Learning rate scheduler
+  scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 1
+    gamma: 0.975
+  
+  # Mean Teacher specific parameters
+  ema_decay: 0.99  # Exponential moving average decay for teacher model (0.99-0.9997)
+  consistency_weight: 0.01  # Weight for consistency loss (10-100 for MSE)
+  consistency_type: "mse"  # Type of consistency loss: "mse" or "kl"
+  consistency_rampup: 100  # Number of epochs to ramp up consistency weight (3-10)
+  
+  # Graph augmentation parameters
+  augmentation:
+    use_feature_noise: true  # Add Gaussian noise to node features
+    feature_noise_std: 0.1  # Standard deviation of feature noise (0.05-0.2)
+    use_edge_dropout: true   
+    edge_dropout_rate: 0.08
+  
