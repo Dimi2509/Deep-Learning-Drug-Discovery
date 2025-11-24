@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from graph_augmentation import GraphAugmentor
+import copy
 
 class SemiSupervisedEnsemble:
     def __init__(
