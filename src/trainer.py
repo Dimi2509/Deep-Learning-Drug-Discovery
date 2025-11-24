@@ -488,7 +488,7 @@ class VATTrainer:
             model.zero_grad()
 
         r_adv = d * self.vat_eps
-        data_r = copy.copy(data)
+        data_r = data.clone()  # Use clone() instead of copy.copy()
         data_r.x = data.x + r_adv
         pred_r = model(data_r)
         vat_loss = torch.nn.functional.mse_loss(pred_r, pred)

@@ -21,8 +21,9 @@ init:
     _partial_: true
     step_size: 1
     gamma: 0.975
-  vat_xi: 1e-5
-  vat_eps: 0.7
-  # vat_ip: 1
-  # unsup_weight: 1.0
-
+  vat_xi: 1e-3 # initially 1e-5 
+  vat_eps: 1 # was 0.7
+  vat_ip: 1
+  unsup_weight: 1.0
+  unsup_ratio: 5
+  
