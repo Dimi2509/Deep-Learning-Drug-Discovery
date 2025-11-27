@@ -1,0 +1,46 @@
+defaults:
+  - _self_
+
+method: fixmatch-ensemble
+
+train:
+  total_epochs: 250
+  validation_interval: 10
+  warmup_epochs: 50  # Number of epochs before using unsupervised loss
+
+init:
+  _target_: trainer.FixMatchEnsemble
+  
+  # Standard supervised training
+  supervised_criterion:
+    _target_: torch.nn.MSELoss
+  
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.01
+    weight_decay: 0.05
+  
+  scheduler:
+    _target_: torch.optim.lr_scheduler.StepLR
+    _partial_: true
+    step_size: 1
+    gamma: 0.975
+  
+  # FixMatch specific parameters
+  unsupervised_weight: 0.5  # Weight for unsupervised loss
+  confidence_threshold: 0.06  # Maximum ensemble std for pseudo-labels (lower = more confident)
+  use_ensemble_pseudolabels: true  # Use ensemble mean for pseudo-labels
+  
+  # Augmentation configuration
+augmentation_config:
+  weak:
+    node_drop_rate: 0.0      # Keep at 0
+    edge_drop_rate: 0.1
+    feature_noise: 0.01
+  strong:
+    node_drop_rate: 0.0      # Change from 0.1 to 0.0
+    edge_drop_rate: 0.4
+    feature_noise: 0.15
+    feature_mask_rate: 0.2
+    subgraph_rate: 0.0

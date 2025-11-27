@@ -104,8 +104,8 @@ class FixMatchEnsemble:
         logger,
         datamodule,
         # FixMatch specific parameters
-        unsupervised_weight=1.0,
-        confidence_threshold=0.5,  # Max std allowed for pseudo-labels
+        unsupervised_weight=0.1,
+        confidence_threshold=0.3,  # Max std allowed for pseudo-labels
         use_ensemble_pseudolabels=True,
         augmentation_config=None,
     ):
