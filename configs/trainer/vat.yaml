@@ -14,16 +14,16 @@ init:
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 0.001
-    weight_decay: 0.05
+    lr: 0.0005
+    weight_decay: 0.1
   scheduler:
     _target_: torch.optim.lr_scheduler.StepLR
     _partial_: true
     step_size: 1
     gamma: 0.975
   vat_xi: 1e-5 # initially 1e-5 
-  vat_eps: 3 # was 0.7
+  vat_eps: 10 # was 0.7
   vat_ip: 5
   unsup_weight: 2.0
-  unsup_ratio: 5
+  unsup_ratio: 2
   
