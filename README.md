@@ -56,3 +56,6 @@ Here are some great resources:
 - Use advanced regularization techniques such as https://openreview.net/forum?id=xkljKdGe4E#discussion
 - You can try changing the generated features of the dataloader
 
+
+## Notes
+After removing edge dropouts, removing alpha rampup to just have a constant alpha worked better. This allowed increasing the consistency weight and made the teacher be similar to the student from the beginning rather tham being way off. Apparently, edge dropout makes inputs completely different between student and teacher, making it hard to learn anything useful. Input noise is probably better for this purpose, but it is only applied to the student in this code.

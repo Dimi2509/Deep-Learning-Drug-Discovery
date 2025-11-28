@@ -102,6 +102,8 @@ class MeanTeacher:
         consistency_type="mse",
         consistency_rampup=5,
         augmentation=None,
+        late_start_epochs=20,
+        slowdown=1000,
     ):
         """
         Args:
@@ -123,7 +125,13 @@ class MeanTeacher:
         
         # Create teacher model as a copy of student
         # Key decision: Teacher parameters are detached (no gradients)
-        self.teacher_model = self._create_teacher_model(self.student_model)
+        # self.teacher_model = self._create_teacher_model(self.student_model)
+
+        # Late start of teacher model
+        self.teacher_model = None
+        self.teacher_initialized = False
+        self.late_start_epochs = late_start_epochs
+        self.late_start_step = 0  # Global step when teacher was initialized
         
         # Loss functions
         self.supervised_criterion = supervised_criterion
@@ -137,6 +145,8 @@ class MeanTeacher:
         self.ema_decay = ema_decay
         self.consistency_weight = consistency_weight
         self.consistency_rampup = consistency_rampup
+        self.alpha = 0.0  # Initial alpha for EMA
+        self.slowdown = slowdown
         
         # Graph augmentation
         if augmentation is None:
@@ -144,8 +154,8 @@ class MeanTeacher:
         self.augmentor = GraphAugmentor(
             use_feature_noise=augmentation.get('use_feature_noise', True), # Default to True
             feature_noise_std=augmentation.get('feature_noise_std', 0.1),
-            use_edge_dropout=augmentation.get('use_edge_dropout', True),
-            edge_dropout_rate=augmentation.get('edge_dropout_rate', 0.1),
+            use_edge_dropout=augmentation.get('use_edge_dropout', False),
+            edge_dropout_rate=augmentation.get('edge_dropout_rate', 0.0),
         )
         
         # Data loaders
@@ -159,6 +169,7 @@ class MeanTeacher:
         
         # Training state
         self.global_step = 0
+        self.current_epoch = 0
     
     def _create_teacher_model(self, student_model):
         """
@@ -178,21 +189,21 @@ class MeanTeacher:
         Update teacher weights using exponential moving average of student weights.
         
         Formula: θ_teacher = α * θ_teacher + (1 - α) * θ_student
-        
-        Key decision: Use adaptive alpha that starts at 0 (teacher = student initially)
-        and increases to self.ema_decay. This prevents teacher from being too different
-        from student in early training.
         """
-        # Adaptive alpha: starts at 0, increases to ema_decay
-        # This follows the Mean Teacher paper's recommendation
-        #alpha = min(1 - 1 / (self.global_step + 1), self.ema_decay)
 
         # Slowdown factor for alpha ramp-up
-        slowdown = 1000  # increase this to slow warmup more
-        alpha = min(1 - 1 / (self.global_step / slowdown + 1), self.ema_decay)
-        
+        # Make sure to start counting after late start
+        # self.alpha = min(steps_since_init / self.slowdown, self.ema_decay)
+        #self.alpha = min(1 - 1 / ((self.global_step) / self.slowdown + 1), self.ema_decay)
+
+        # Adaptive alpha: 0.99 during rampup, then 0.999
+        if (self.current_epoch - self.late_start_epochs) < self.consistency_rampup:
+            self.alpha = 0.99  # Faster adaptation during rampup
+        else:
+            self.alpha = self.ema_decay  # Slower adaptation after rampup (0.999)
+
         for teacher_param, student_param in zip(self.teacher_model.parameters(), self.student_model.parameters()):
-            teacher_param.data.mul_(alpha).add_(student_param.data, alpha=1 - alpha)
+            teacher_param.data.mul_(self.alpha).add_(student_param.data, alpha=1 - self.alpha)
     
     def _get_consistency_weight(self, epoch):
         """
@@ -202,12 +213,32 @@ class MeanTeacher:
         early teacher predictions are poor. Using sigmoid (not linear) gives
         smoother transition as recommended in Temporal Ensembling paper.
         """
+        # Teacher late start
+        if not self.teacher_initialized:
+            return 0.0  # No consistency before teacher exists
+        
         if self.consistency_rampup == 0:
             return self.consistency_weight
         
-        current = np.clip(epoch, 0.0, self.consistency_rampup)
-        phase = 1.0 - current / self.consistency_rampup
-        return self.consistency_weight * float(np.exp(-5.0 * phase * phase))
+        current = np.clip(epoch - self.late_start_epochs, 0.0, self.consistency_rampup)
+        rampup_value = current / self.consistency_rampup
+        
+        # Sigmoid rampup (smoother than Gaussian)
+        # Maps [0,1] -> [0,1] with smooth S-curve
+        # More gradual in the middle where you're seeing spikes
+        #rampup_factor = rampup_value ** 2 * (3.0 - 2.0 * rampup_value)  # Smoothstep BEST ONE SO FAR
+        
+        # Alternative: Gaussian rampup (original paper, more aggressive)
+        #rampup_factor = np.exp(-5.0 * (1.0 - rampup_value) ** 2)
+        
+        # Alternative: Linear rampup (most gradual)
+        rampup_factor = rampup_value
+
+        # x3 rampup for more gradual start
+        #rampup_factor = rampup_value ** 3
+        
+        return self.consistency_weight * float(rampup_factor)
+    
     
     def _consistency_loss(self, student_output, teacher_output):
         """
@@ -218,6 +249,42 @@ class MeanTeacher:
         else:
             raise ValueError(f"Unknown consistency type: {self.consistency_type}")
     
+    def _train_step_supervised_only(self, labeled_batch, epoch):
+        """
+        Training step before teacher is initialized.
+        Only supervised loss, no consistency.
+        """
+        self.student_model.train()
+        
+        losses_dict = {}
+        
+        # Process labeled data
+        labeled_data, labeled_targets = labeled_batch
+        labeled_data = labeled_data.to(self.device)
+        labeled_targets = labeled_targets.to(self.device)
+        
+        # Forward pass (student only)
+        student_out = self.student_model(labeled_data)
+        
+        # Supervised loss
+        supervised_loss = self.supervised_criterion(student_out, labeled_targets)
+        losses_dict['supervised_loss'] = supervised_loss.item()
+        
+        # No consistency loss yet
+        losses_dict['consistency_loss'] = 0.0
+        losses_dict['consistency_weight'] = 0.0
+        losses_dict['total_loss'] = supervised_loss.item()
+        
+        # Optimization
+        self.optimizer.zero_grad()
+        supervised_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.student_model.parameters(), max_norm=1.0)
+        self.optimizer.step()
+        
+        self.global_step += 1
+    
+        return losses_dict
+
     def _train_step(self, labeled_batch, unlabeled_batch, epoch):
         """
         Single training step with both labeled and unlabeled data.
@@ -231,7 +298,7 @@ class MeanTeacher:
         6. Update teacher with EMA
         """
         self.student_model.train()
-        self.teacher_model.eval()  # Keep in eval, dropouts not used
+        self.teacher_model.train()
         
         losses_dict = {}
         
@@ -242,7 +309,7 @@ class MeanTeacher:
         
         # Create two augmented views
         student_labeled = augment_batch(labeled_data, self.augmentor, training=True)
-        teacher_labeled = augment_batch(labeled_data, self.augmentor, training=True)
+        teacher_labeled = augment_batch(labeled_data, self.augmentor, training=True) # labeled_data # 
         
         # Forward pass
         with torch.no_grad():
@@ -262,7 +329,7 @@ class MeanTeacher:
         unlabeled_data = unlabeled_data.to(self.device)
         
         student_unlabeled = augment_batch(unlabeled_data, self.augmentor, training=True)
-        teacher_unlabeled = augment_batch(unlabeled_data, self.augmentor, training=True)
+        teacher_unlabeled = augment_batch(unlabeled_data, self.augmentor, training=True) # unlabeled_data #
         
         with torch.no_grad():
             teacher_unlabeled_out = self.teacher_model(teacher_unlabeled)
@@ -315,6 +382,7 @@ class MeanTeacher:
         # print(f"Teacher data x:  {teacher_labeled.x[0, :5]}")
         
         self.global_step += 1
+        self.current_epoch = epoch
         
         return losses_dict
     
@@ -359,7 +427,24 @@ class MeanTeacher:
                 'consistency_weight': [],
                 'total_loss': [],
             }
+
+             # === LATE START: Initialize teacher after N epochs ===
+            #print(f"Epoch {epoch} late start epochs: {self.late_start_epochs}, initialized: {self.teacher_initialized}")
+            if epoch == self.late_start_epochs and not self.teacher_initialized:
+                print(f"\n{'='*60}")
+                print(f"INITIALIZING TEACHER MODEL (Late Start at Epoch {epoch})")
+                print(f"{'='*60}\n")
+                
+                # Create teacher from current trained student
+                self.teacher_model = self._create_teacher_model(self.student_model)
+                self.teacher_initialized = True
+                
+                # Reset global_step for consistency rampup
+                # (so rampup starts from this epoch)
+                self.late_start_step = self.global_step
+
             
+                
             # Create iterators for both dataloaders
             labeled_iter = iter(self.train_labeled_loader)
             unlabeled_iter = iter(self.train_unlabeled_loader) if self.train_unlabeled_loader else None
@@ -374,8 +459,17 @@ class MeanTeacher:
                     unlabeled_batch = next(unlabeled_iter)
                 
                 # Training step
-                losses = self._train_step(labeled_batch, unlabeled_batch, epoch)
-                
+                # losses = self._train_step(labeled_batch, unlabeled_batch, epoch)
+
+                # Teacher Late start implementation
+                            # === Use teacher only if initialized ===
+                if self.teacher_initialized:
+                    # Full Mean Teacher training
+                    losses = self._train_step(labeled_batch, unlabeled_batch, epoch)
+                else:
+                    # Supervised-only training (pre-initialization)
+                    losses = self._train_step_supervised_only(labeled_batch, epoch)
+                    
                 # Accumulate losses
                 for key in epoch_losses:
                     if key in losses:
@@ -388,21 +482,27 @@ class MeanTeacher:
             summary_dict = {
                 key: np.mean(values) for key, values in epoch_losses.items()
             }
+
+            # Add alpha to summary
+            if self.teacher_initialized:
+                summary_dict['ema_alpha'] = self.alpha
             #summary_dict['learning_rate'] = self.optimizer.param_groups[0]['lr']
             #summary_dict['ema_decay_used'] = min(1 - 1 / (self.global_step + 1), self.ema_decay)
             
             # Validation
             if epoch % validation_interval == 0 or epoch == total_epochs:
-                val_metrics_teacher = self.validate(use_teacher=True)
-                val_metrics_student = self.validate(use_teacher=False)
                 
-                summary_dict['val_MSE_teacher'] = val_metrics_teacher['val_MSE']
+                if self.teacher_initialized:
+                    val_metrics_teacher = self.validate(use_teacher=True)
+                    summary_dict['val_MSE_teacher'] = val_metrics_teacher['val_MSE']
+
+                val_metrics_student = self.validate(use_teacher=False)            
                 summary_dict['val_MSE_student'] = val_metrics_student['val_MSE']
                 
                 pbar.set_postfix({
                     'sup_loss': f"{summary_dict['supervised_loss']:.4f}",
                     'cons_loss': f"{summary_dict['consistency_loss']:.4f}",
-                    'val_MSE': f"{val_metrics_teacher['val_MSE']:.4f}"
+                    #'val_MSE': f"{val_metrics_teacher['val_MSE']:.4f}"
                 })
             
             # Log to WandB

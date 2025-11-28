@@ -18,7 +18,7 @@ init:
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 0.0001
+    lr: 0.01
     weight_decay: 0.005
   
   # Learning rate scheduler
@@ -29,15 +29,17 @@ init:
     gamma: 0.975
   
   # Mean Teacher specific parameters
-  ema_decay: 0.99  # Exponential moving average decay for teacher model (0.99-0.9997)
-  consistency_weight: 0.01  # Weight for consistency loss (10-100 for MSE)
+  ema_decay: 0.999  # Exponential moving average decay for teacher model (0.99-0.9997)
+  consistency_weight: 1  # Weight for consistency loss (10-100 for MSE)
   consistency_type: "mse"  # Type of consistency loss: "mse" or "kl"
-  consistency_rampup: 100  # Number of epochs to ramp up consistency weight (3-10)
+  consistency_rampup: 180  # Number of epochs to ramp up consistency weight (3-10)
+  late_start_epochs: 1 # Teacher network late start
+  slowdown: 0
   
   # Graph augmentation parameters
   augmentation:
     use_feature_noise: true  # Add Gaussian noise to node features
-    feature_noise_std: 0.1  # Standard deviation of feature noise (0.05-0.2)
-    use_edge_dropout: true   
-    edge_dropout_rate: 0.08
+    feature_noise_std: 0.15  # Standard deviation of feature noise (0.05-0.2)
+    use_edge_dropout: false   
+    edge_dropout_rate: 0.2
   
