@@ -17,7 +17,12 @@ def main(cfg):
     print(OmegaConf.to_yaml(cfg))
 
     if cfg.device in ["unset", "auto"]:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
     else:
         device = torch.device(cfg.device)
 
@@ -29,11 +34,12 @@ def main(cfg):
 
     dm = hydra.utils.instantiate(cfg.dataset.init)
 
-    model = hydra.utils.instantiate(cfg.model.init).to(device)
-
-    if cfg.compile_model:
-        model = torch.compile(model)
-    models = [model]
+    models = []
+    for _ in range(cfg.n_models):
+        model = hydra.utils.instantiate(cfg.model.init).to(device)
+        if cfg.compile_model:
+            model = torch.compile(model)
+        models.append(model)
     trainer = hydra.utils.instantiate(cfg.trainer.init, models=models, logger=logger, datamodule=dm, device=device)
 
     results = trainer.train(**cfg.trainer.train)

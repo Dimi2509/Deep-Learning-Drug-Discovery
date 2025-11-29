@@ -1,4 +1,5 @@
 from functools import partial
+from itertools import cycle
 
 import numpy as np
 import torch
@@ -14,9 +15,11 @@ class SemiSupervisedEnsemble:
         models,
         logger,
         datamodule,
+        lambda_cps: float = 1.0
     ):
         self.device = device
         self.models = models
+        self.lambda_cps = lambda_cps
 
         # Optim related things
         self.supervised_criterion = supervised_criterion
@@ -28,6 +31,9 @@ class SemiSupervisedEnsemble:
         self.train_dataloader = datamodule.train_dataloader()
         self.val_dataloader = datamodule.val_dataloader()
         self.test_dataloader = datamodule.test_dataloader()
+
+        self.unsupervised_train_dataloader = datamodule.unsupervised_train_dataloader()
+
 
         # Logging
         self.logger = logger
@@ -57,21 +63,62 @@ class SemiSupervisedEnsemble:
             for model in self.models:
                 model.train()
             supervised_losses_logged = []
-            for x, targets in self.train_dataloader:
-                x, targets = x.to(self.device), targets.to(self.device)
+            cps_losses_logged = [] 
+            for (x_l, y_l), (x_u, _) in zip(cycle(self.train_dataloader), self.unsupervised_train_dataloader):
+                x_l, y_l = x_l.to(self.device), y_l.to(self.device)
+                x_u = x_u.to(self.device)
                 self.optimizer.zero_grad()
-                # Supervised loss
-                supervised_losses = [self.supervised_criterion(model(x), targets) for model in self.models]
+
+                # Forward pass on labeled + unlabeled
+                preds_l = []  # labeled predictions
+                preds_u = []  # unlabeled predictions
+                for model in self.models:
+                    preds_l.append(model(x_l))
+                    preds_u.append(model(x_u))
+
+                # Supervised loss (only labeled data)
+                supervised_losses = [
+                    self.supervised_criterion(pred_l, y_l) for pred_l in preds_l
+                ]
                 supervised_loss = sum(supervised_losses)
-                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))  # type: ignore
-                loss = supervised_loss
-                loss.backward()  # type: ignore
+
+                # CPS: consistency loss between the two models 
+                lambda_cps = self.lambda_cps
+
+                if len(self.models) == 2:
+                    # CPS: consistency loss ONLY on unlabeled data
+                    preds1_u = preds_u[0]
+                    preds2_u = preds_u[1]
+
+                    # model 1 matches model 2, and vice versa (regression CPS)
+                    loss_cps1 = torch.nn.functional.mse_loss(preds1_u, preds2_u.detach())
+                    loss_cps2 = torch.nn.functional.mse_loss(preds2_u, preds1_u.detach())
+                    cps_loss = loss_cps1 + loss_cps2
+
+                    loss = supervised_loss + lambda_cps * cps_loss
+                else:
+                    # fallback: just supervised if not exactly 2 models
+                    loss = supervised_loss
+
+                # logging + backward as before
+                supervised_losses_logged.append(supervised_loss.detach().item() / len(self.models))
+                if len(self.models) == 2:
+                    cps_losses_logged.append(cps_loss.detach().item())
+
+                loss.backward()
                 self.optimizer.step()
+
             self.scheduler.step()
             supervised_losses_logged = np.mean(supervised_losses_logged)
+            
+            if len(cps_losses_logged) > 0:
+                cps_loss_epoch = np.mean(cps_losses_logged)
+            else:
+                cps_loss_epoch = 0.0
 
             summary_dict = {
                 "supervised_loss": supervised_losses_logged,
+                "cps_loss": cps_loss_epoch,
             }
             if epoch % validation_interval == 0 or epoch == total_epochs:
                 val_metrics = self.validate()

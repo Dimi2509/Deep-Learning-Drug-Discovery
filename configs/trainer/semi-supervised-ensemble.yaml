@@ -16,6 +16,7 @@ init:
     _partial_: true
     lr: 0.001
     weight_decay: 0.005
+  lambda_cps: 1.0
   scheduler:
     _target_: torch.optim.lr_scheduler.StepLR
     _partial_: true
