@@ -2,6 +2,8 @@
 
 This project provides an introduction to Graph Neural Networks (GNNs) using PyTorch and PyTorch Geometric on the dataset QM9.
 
+**This branch includes the gcn architecture and mean-teacher semi-supervised learning approach.**
+
 ## Installation
 
 To run this project, you need to install the required Python packages. You can install them using pip:
@@ -45,6 +47,12 @@ You can override the default configuration by passing arguments from the command
 python src/run.py model=gcn
 ```
 
+To run mean teacher training, overrite the default trainer:
+
+```bash
+python src/run.py model=gin trainer=mean-teacher
+```
+
 The configuration files are located in the `configs/` directory.
 
 ## Improving the predictive accuracy
@@ -59,3 +67,6 @@ Here are some great resources:
 
 ## Notes
 After removing edge dropouts, removing alpha rampup to just have a constant alpha worked better. This allowed increasing the consistency weight and made the teacher be similar to the student from the beginning rather tham being way off. Apparently, edge dropout makes inputs completely different between student and teacher, making it hard to learn anything useful. Input noise is probably better for this purpose, but it is only applied to the student in this code.
+
+BEST RUN: 
+27/11/25-00-41_gin_mean-teacher_seed=0
